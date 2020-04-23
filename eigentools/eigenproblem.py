@@ -218,19 +218,47 @@ class Eigenproblem():
         sigmas[1:-1] = [0.5*(np.abs(lambda1_sorted[j] - lambda1_sorted[j - 1]) + np.abs(lambda1_sorted[j + 1] - lambda1_sorted[j])) for j in range(1, len(lambda1_sorted) - 1)]
         sigmas[-1] = np.abs(lambda1_sorted[-2] - lambda1_sorted[-1])
 
+        # Cleaning step 1 - remove outlier eigenalues from each solve.
+        # Gets rid of all eigenvalues which are really far away from both of their neighbors.
+        sigmas_forward = np.zeros(len(lambda1_sorted))
+        sigmas_backward = np.zeros(len(lambda1_sorted))
+        sigmas_forward[:-1] = np.abs(lambda1_sorted[1:] - lambda1_sorted[:-1])
+        sigmas_forward[-1] = np.abs(lambda1_sorted[-1] - lambda1_sorted[-2])
+        sigmas_backward[1:] = np.abs(lambda1_sorted[1:] - lambda1_sorted[:-1])
+        sigmas_backward[0] =  np.abs(lambda1_sorted[1] - lambda1_sorted[0])
+
+
+        closeness   = np.logical_or((sigmas_forward  < 1e6*np.abs(lambda1_sorted.real)),
+                                    (sigmas_backward < 1e6*np.abs(lambda1_sorted.real)) )
+
+        lambda1_sorted   = lambda1_sorted[np.where(closeness)]
+        lambda1_and_indx = lambda1_and_indx[np.where(closeness)]
+        sigmas           = lambda1_and_indx[np.where(closeness)]
+
+        sigmas_forward      = np.zeros(len(lambda2_sorted))
+        sigmas_backward     = np.zeros(len(lambda2_sorted))
+        sigmas_forward[:-1] = np.abs(lambda2_sorted[1:] - lambda2_sorted[:-1])
+        sigmas_forward[-1]  = np.abs(lambda2_sorted[-1] - lambda2_sorted[-2])
+        sigmas_backward[1:] = np.abs(lambda2_sorted[1:] - lambda2_sorted[:-1])
+        sigmas_backward[0]  = np.abs(lambda2_sorted[1]  - lambda2_sorted[0])
+
+        closeness   = np.logical_or((sigmas_forward  < 1e6*np.abs(lambda2_sorted.real)),
+                                    (sigmas_backward < 1e6*np.abs(lambda2_sorted.real)) )
+        lambda2_sorted      = lambda2_sorted[np.where(closeness)]
+
         if not (np.isfinite(sigmas)).all():
             print("WARNING: at least one eigenvalue spacings (sigmas) is non-finite (np.inf or np.nan)!")
     
-        # Nearest delta
-        delta_near = np.array([np.nanmin(np.abs(lambda1_sorted[j] - lambda2_sorted)/sigmas[j]) for j in range(len(lambda1_sorted))])
-    
-        # Discard eigenvalues with 1/delta_near < 10^6
-        lambda1_and_indx = lambda1_and_indx[np.where((1.0/delta_near) > 1E6)]
-        #print(lambda1_and_indx)
-        
+        # Cleaning step 2 - Similarity between lowres / hires.
+        # For each lowres eigenvalue, find the fractional difference between it and the most similar hires eigenvalue
+        delta_near = np.array([np.nanmin(np.abs((lambda1_sorted[j].real- lambda2_sorted.real)/lambda1_sorted[j].real)) for j in range(len(lambda1_sorted))])
+        good_vals  = delta_near < 1e-6 #same to one part in 1e6
+
+        lambda1_and_indx = lambda1_and_indx[np.where(good_vals)]
+     
         lambda1 = lambda1_and_indx[:, 0]
         indx = lambda1_and_indx[:, 1].astype(np.int)
-        
+       
         #delta_near_unsorted = delta_near[reverse_lambda1_indx]
         #lambda1[np.where((1.0/delta_near_unsorted) < 1E6)] = None
         #lambda1[np.where(np.isnan(1.0/delta_near_unsorted) == True)] = None
